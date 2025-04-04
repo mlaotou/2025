@@ -1,0 +1,219 @@
+---
+title: "PCA"
+author: "milaotou"
+date: "2025-03-04"
+output: html_document
+---
+# 设置工作目录
+```{r setup, include=FALSE}
+# Global chunk options禁止全局代码自动运行
+knitr::opts_chunk$set(echo=FALSE, tidy=TRUE, warning=FALSE, message=FALSE)
+
+library(rstudioapi)
+setwd(dirname(getActiveDocumentContext()$path))
+getwd()
+```
+
+# 加载包
+```{r}
+library(tidyverse)
+library(vegan)
+library(FactoMineR)
+library(ggplot2)
+library(ggthemes)
+library(ggExtra)
+library(ggrepel)
+source("input/global_vars.R")
+```
+
+# 利用FactoMineR包绘制，RDA（冗余分析）执行pca
+```{r}
+#导入数据
+var<-read.csv("resources/database/pca/PCA_data.csv",header = T,row.names = 1)
+
+# 使用RDA函数执行pca分析,scale = TRUE代表进行标准化
+var.pca <- rda(var, scale = TRUE)
+var.pca
+
+# scaling参数代表为标尺类型
+#默认为2型标尺
+summary(var.pca)
+#可以切换为1型标尺
+summary(var.pca, scaling = 1)
+#提取特征值
+ev <- var.pca$CA$eig
+ev
+#kaiser-Guttman准则选取排序轴
+ev[ev>mean(ev)]
+#断棍模型
+n<-length(ev)
+bsm<-data.frame(j=seq(1:n),p=0)
+bsm$p[1]<-1/n          
+for(i in 2:n){
+  bsm$p[i]=bsm$p[i-1]+(1/(n+1-i))
+}
+bsm$p<-100*bsm$p/n
+bsm
+#特征值
+pdf(paste0("output/figures/pca/", "pcaplot_", Sys.Date(), ".pdf"), width = 8, height = 6)
+barplot(ev,main="Eigvaralues",col="bisque",las=2)
+abline(h=mean(ev),col="red")#特征根平均值
+legend("topright","Average eigvaralue",lwd=1,col=2,bty="n")
+#方差百分比
+barplot(t(cbind(100*ev/sum(ev),bsm$p[n:1])),beside=TRUE,
+        main="%variance",col=c("bisque",2),las=2)
+legend("topright",c("%eigvaralue","Broken stick model"),
+       pch=15,col=c("bisque",2),bty="n")
+
+#1型标尺默认图
+biplot(var.pca, scaling = 1, main = "PCA - scaling 1")
+#2型标尺默认图
+biplot(var.pca, main = "PCA - scaling 2")
+
+
+#绘图优化
+#提取样本坐标,添加分组列
+site<-var.pca$CA$u[,1:2] %>%
+  as_tibble() %>%
+  mutate(
+    sample = rownames(var),
+    group = factor(c(rep("A", 6), rep("B", 6), rep("C", 6), rep("D", 6), rep("E", 6)))
+  )
+#提取变量坐标
+var_data<-var.pca$CA$v[,1:2]
+head(var_data)
+#提取解释度
+pca1<-round(var.pca$CA$eig[1]/sum(var.pca$CA$eig)*100,2)
+pca1
+pca2<-round(var.pca$CA$eig[2]/sum(var.pca$CA$eig)*100,2)
+pca2
+#绘图
+# 绘制样本得分图site
+sample_score <-ggplot(site) +
+  geom_point(aes(PC1,PC2,color=group),size=4)+
+  scale_colour_manual(values=c("#99e5f3","#67a8cd","#ffc17f"
+                               ,"#cf9f88","#6fb3a8"))+
+  geom_text_repel(aes(PC1,PC2,label = sample,family = "serif"))+
+  stat_ellipse(geom = "polygon", level = 0.9,
+               linetype = 1, linewidth = 0.1,
+               aes(fill = group, x = PC1, y = PC2),
+               alpha = 0.3, show.legend = F) +#有分组文件时，添加置信椭圆
+  scale_fill_manual(values = c("#99e5f3","#67a8cd","#ffc17f"
+                               ,"#cf9f88","#6fb3a8"))+
+  labs(title = "Sample_score",x=sprintf("PC1(%s%%)", pca1), y = sprintf("PC2(%s%%)", pca2))+ #添加轴标题，%s指插入引用参数pca1和pca2
+  geom_hline(yintercept=0,linetype=3,size=1) + 
+  geom_vline(xintercept=0,linetype=3,size=1)+
+  guides(shape=guide_legend(title=NULL,color="black"),
+         fill=guide_legend(title=NULL))+
+  theme_ggplot()
+  
+sample_score 
+
+# 绘制变量载荷图var_data
+var_loading_plot <- ggplot(var_data) +
+    geom_point(aes(PC1,PC2),color="#99e5f3",size=4) +
+  geom_segment(aes(x = 0, y = 0, xend = 0.98*PC1, yend = 0.98*PC2), 
+               arrow = arrow(angle=22.5,length = unit(0.35,"cm"),
+                             type = "closed"),linetype=1, size=0.6,colour = "#cf9f88")+#颜色可修改
+  geom_text_repel(aes(PC1,PC2,label=row.names(var_data),family = "serif"))+
+  labs(title = "Var_loading plot",x=sprintf("PC1(%s%%)", pca1), y = sprintf("PC2(%s%%)", pca2))+#%s为占位符，%%为普通%
+  geom_hline(yintercept=0,linetype=3,size=1) + 
+  geom_vline(xintercept=0,linetype=3,size=1)+
+  guides(shape=guide_legend(title=NULL,color="black"),
+         fill=guide_legend(title=NULL),
+         )+
+  theme_ggplot()
+var_loading_plot
+# biplot
+biplot <- ggplot() +
+  geom_point(data = site,aes(PC1,PC2,color=group),size=4)+
+  scale_colour_manual(values=c("#99e5f3","#67a8cd","#ffc17f"
+                               ,"#cf9f88","#6fb3a8"))+
+  stat_ellipse(data = site, geom = "polygon", level = 0.9,
+               linetype = 1, linewidth = 0.1,
+               aes(fill = group, x = PC1, y = PC2),
+               alpha = 0.3, show.legend = F) +
+  scale_fill_manual(values = c("#99e5f3","#67a8cd","#ffc17f"
+                               ,"#cf9f88","#6fb3a8"))+
+  geom_segment(data = var_data,aes(x = 0, y = 0, xend = PC1, yend = PC2), 
+               arrow = arrow(angle=22.5,length = unit(0.35,"cm"),
+                             type = "closed"),linetype=1, size=0.6,colour = "red")+#颜色可修改
+  geom_text_repel(data = var_data,aes(PC1,PC2,label=row.names(var_data)),family="serif")+
+  labs(title = "Biplot",x=sprintf("PC1(%s%%)", pca1), y = sprintf("PC2(%s%%)", pca2))+     
+  geom_hline(yintercept=0,linetype=3,size=1) + 
+  geom_vline(xintercept=0,linetype=3,size=1)+
+  guides(shape=guide_legend(title=NULL,color="black"),
+         fill=guide_legend(title=NULL),
+         )+
+  theme_ggplot()+
+  theme(legend.position = "bottom")
+biplot
+#添加边际密度曲线
+ggMarginal(
+  biplot,
+  type=c('density'),
+  margins='both',
+  size=3.5,
+  groupColour=F,
+  groupFill=T
+)
+dev.off()
+
+# #保存图形
+# ggsave(paste0("output/figures/pca/", "pcaplot_", Sys.Date(), ".pdf"),width = 16,height = 8)
+# ggsave_png(paste0("output/figures/pca/", "pcaplot_", Sys.Date(), ".png"), width = 16,height = 8)
+
+```
+
+# 使用PCA函数,RDA是冗余分析，结合了PCA
+```{r}
+library("factoextra")
+library("corrplot")#载入相关性绘图包
+res.pca <- PCA(var, graph = FALSE) #PCA分析并标准化数据,不能包含非数值列
+res.pca  #PCA分析结果
+eig.val <- get_eigenvalue(res.pca)#获取主成分的特征值
+eig.val #结果中第一列是特征值，第二列是可解释变异的比例，第三列是累计可解释变异的比例;筛选主成分标准：特征值大于1，累加值大于80%
+
+# 绘图
+pdf(paste0("output/figures/pca/", "pcaplot1_", Sys.Date(), ".pdf"), width = 8, height = 6)
+fviz_eig(res.pca, addlabels = TRUE, ylim = c(0, 70))#碎石图
+var <- get_pca_var(res.pca)#提取PCA结果中变量的信息
+head(var$coord)#展示变量与主成分之间的关系，以及变量之间的关联；即系数值
+fviz_pca_var(res.pca, col.var = "black")#变量与主成分之间的关系，以及变量之间的关联（图形展示）
+
+corrplot(var$cos2, is.corr=FALSE)#每个变量在各个主成分中的代表性（高cos2值代表性强）
+fviz_pca_var(res.pca, col.var = "contrib",#cos2 在PC1和PC2中的比例，越高代表性越强（颜色）
+             gradient.cols = c("#00AFBB", "#E7B800", "#FC4E07")
+)
+#以上是针对变量的分析，以下是针对观测值的分析（观测值=样本）
+ind <- get_pca_ind(res.pca)#提取出individuals信息
+ind
+group = factor(c(rep("A", 6), rep("B", 6), rep("C", 6), rep("D", 6), rep("E", 6)))
+fviz_pca_ind(res.pca, pointsize = "cos2", #（1）样本不分组
+             pointshape = 21, fill = "#E7B800",
+             repel = TRUE # Avoid text overlapping (slow if many points)
+)#展示individuals的点图，以cos2值来代表各个individuals点的圆圈大小
+fviz_pca_ind(res.pca,#（2）按照data的Group组对观测值分组设定颜色，显示置信区间
+             geom.ind = "point", 
+             pointsize= TRUE,# show points only (nbut not "text")
+             col.ind = group, # color by groups
+             palette = c("#00AFBB", "#E7B800", "#FC4E07","#9888B5","#F2A797"),
+             addEllipses = TRUE, # Concentration ellipses
+             legend.title = "Groups"
+            )+ 
+  theme_ggplot()
+
+fviz_pca_biplot(res.pca, #（3）绘制biplot，用于展示变量较少的情况
+                col.ind = group, palette = "jco", 
+                addEllipses = TRUE, label = "var",
+                col.var = "black", repel = TRUE,
+                legend.title = "Groups")+
+  theme_ggplot()
+
+dev.off()
+```
+
+```{r}
+
+```
+
