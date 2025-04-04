@@ -1,0 +1,95 @@
+---
+title: "ridge plot"
+author: "milaotou"
+date: "2025-03-04"
+output: html_document
+---
+# 设置工作目录
+```{r setup, include=FALSE}
+# Global chunk options禁止全局代码自动运行
+knitr::opts_chunk$set(echo=FALSE, tidy=TRUE, warning=FALSE, message=FALSE)
+
+library(rstudioapi)
+setwd(dirname(getActiveDocumentContext()$path))
+getwd()
+```
+
+# 加载包
+```{r}
+library(tidyverse)
+library(patchwork) #组合图
+source("input/global_vars.R")
+```
+
+# ridge
+```{r}
+# 定义颜色
+sampleColor = c('#737fb0','#c16360','grey93', '#a38861',
+                'grey78','#3d74b6', '#9ebcde', '#bfd8f0',
+                '#c69a58', '#e79941','grey63',
+                'grey48', '#ac3135','#c4cee7')
+#读取数据
+ridge_data <- read.csv("resources/database/ridge/ridge_data.csv",header = T) %>%
+  mutate(ID = paste("P1_T_",row_number(), sep="")) # 缩减id长度
+
+# 绘制注释条带
+ann_plot <- ggplot(ridge_data,
+                        aes(x = 1, y = patient, fill = smoking1)) +
+  geom_tile(height = 0.9, width = 0.9) + #矩形瓦片
+  scale_fill_manual(values = c("#d95f02", "#7570b3")) +
+  scale_x_continuous(expand = c(0, 0)) +
+  scale_y_discrete(expand = c(0, 0)) +
+  facet_grid(
+    mutation1 ~ ., scales = "free_y", space = "free_y") +
+  labs(
+    fill = "Smoking?"
+  ) +
+  theme_features_pub() +
+  theme(
+    panel.grid = element_blank(),
+    panel.spacing.y = unit(0, "cm"),
+    axis.title = element_blank(),
+    axis.text.x =element_blank(),
+    axis.text.y=element_text(color="black"),
+    legend.key.width = unit(0.35, "cm"),
+    strip.text = element_blank(),
+    strip.background = element_blank())
+# 绘制山脊图（左侧）
+ridge_plot1 <- ggplot(data = ridge_data,aes(x = aviv_cnvscore_hg38, y = patient, height = after_stat(density))) +
+  ggridges::geom_density_ridges(aes(fill = patient),alpha = .8) +
+  scale_x_reverse() +
+  scale_fill_manual(values = sampleColor) + 
+  facet_grid(
+    mutation1 ~ ., scales = "free_y", space = "free_y") +
+  labs(x = '',
+       y = '') +
+  ggridges::theme_ridges(grid = T) +
+  theme(axis.text.y = element_blank(),
+        legend.position = "none")
+print(ridge_plot1)
+# 组合图形
+wrap_plots(
+  ann_plot + theme(legend.direction = "vertical"),
+  ridge_plot1,
+  nrow = 1,
+  widths = c(0.05, 0.8, 0.8)) &
+  theme(
+    legend.position = "bottom",
+    legend.title.position = "top")
+
+#保存图形
+
+ggsave(paste0("output/figures/ridge/", "ridge_", Sys.Date(), ".pdf"),width = 16,height = 8)
+ggsave(paste0("output/figures/ridge/", "ridge_", Sys.Date(), ".png"), width = 16,height = 8)
+
+```
+
+
+```{r}
+
+```
+
+```{r}
+
+```
+

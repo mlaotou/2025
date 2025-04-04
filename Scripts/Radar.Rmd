@@ -1,0 +1,89 @@
+---
+title: "Radar plot"
+author: "milaotou"
+date: "2025-03-04"
+output: html_document
+---
+# 设置工作目录
+```{r setup, include=FALSE}
+# Global chunk options禁止全局代码自动运行
+knitr::opts_chunk$set(echo=FALSE, tidy=TRUE, warning=FALSE, message=FALSE)
+
+library(rstudioapi)
+setwd(dirname(getActiveDocumentContext()$path))
+getwd()
+```
+
+# 加载包
+```{r}
+pacman::p_load(tidyverse, ggradar, ggplot2, scales, tibble, patchwork)
+source("input/global_vars.R")
+```
+
+# radar
+```{r}
+mtcars_radar <- mtcars %>%
+  as_tibble(rownames = "group") %>%
+  mutate_at(vars(-group), rescale) %>% #scales 包中的函数，用于将数值列的范围重新缩放到 [0, 1] 区间
+  tail(4) %>%
+  select(1:10)
+mtcars_radar
+ggradar(mtcars_radar)
+
+
+```
+
+# 参数调整
+
+```{r}
+
+```
+
+# 批量绘制分面雷达图
+```{r}
+mtcars_radar <- mtcars %>%
+  as_tibble(rownames = "group") %>%
+  mutate_at(vars(-group), rescale) %>% #scales 包中的函数，用于将数值列的范围重新缩放到 [0, 1] 区间
+  tail(4) %>%
+  select(1:10)
+mtcars_radar
+
+color_palette <- c("#78A8C6", "#BEBADA","#8DD3C7","#F37D74") %>%
+  setNames(mtcars_radar$group)
+
+# 使用lapply+自定义函数批量绘图
+facet_plot <- lapply(unique(mtcars_radar$group), function(g) {
+  data_subset <- mtcars_radar %>% filter(group == g)  # 筛选对应组的数据
+  ggradar(data_subset,
+          font.radar = "serif", # 字体
+          group.line.width = 1,  # 线宽
+          group.point.size = 2,  # 数据点大小
+          grid.label.size = 3,  # 网格标签字体大小
+          axis.label.size = 3,  # 轴标签字体大小
+          axis.line.colour = "grey",  # 轴线颜色
+          background.circle.colour = "#C7E6F0",  # 背景颜色
+          legend.text.size = 10,  # 图例字体大小
+          gridline.min.linetype = "longdash",  # 最小网格线
+          gridline.mid.linetype = "longdash",  # 中间网格线
+          gridline.max.linetype = "longdash",  # 最大网格线
+          gridline.min.colour = "grey",
+          gridline.mid.colour = "#007A87",
+          gridline.max.colour = "black",
+         ) +
+    ggtitle(g) + # 每张图的标题为 group 名称
+    coord_cartesian(clip="off") + # 关闭裁剪
+    scale_color_manual(values = color_palette[g]) +
+    theme(plot.title = element_text(size = 10,vjust=0.5,hjust=0.5,
+                                    face="bold",color="black"))
+})
+
+# 使用 patchwork 拼接多个雷达图
+final_plot <- wrap_plots(facet_plot, ncol = 4)  # 设定每行 4个图
+print(final_plot)
+
+#保存图形
+ggsave(paste0("output/figures/radar/", "radar_", Sys.Date(), ".pdf"),width = 18,height = 4)
+ggsave(paste0("output/figures/radar/", "radar_", Sys.Date(), ".png"), width = 18,height = 4, dpi = 300)
+
+```
+

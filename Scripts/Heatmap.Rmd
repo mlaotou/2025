@@ -1,0 +1,256 @@
+---
+title: "Heatmaps"
+author: "milaotou"
+date: "2025-03-04"
+output: html_document
+---
+# 设置工作目录
+```{r setup, include=FALSE}
+# Global chunk options禁止全局代码自动运行
+knitr::opts_chunk$set(echo=FALSE, tidy=TRUE, warning=FALSE, message=FALSE)
+
+library(rstudioapi)
+setwd(dirname(getActiveDocumentContext()$path))
+getwd()
+```
+
+# 加载包
+```{r}
+library(ComplexHeatmap)
+library(tidyverse)
+library(circlize) #加载包
+
+```
+
+# pheatmap包绘制热图
+```{r}
+
+library(pheatmap)
+# 读取代谢物数据
+m <- read.csv("resources/database/heatmap/metabolite_data.csv",header = T,row.names = 1)
+# 绘图
+pdf("output/figures/heatmaps/heatmap_meta.pdf", width = 8, height = 7)
+pheatmap(m,scale="row",cluster_rows = TRUE, cluster_cols = TRUE,
+         cellwidth=7,cellheight=7,
+         border_color="black",
+         color = colorRampPalette(c("navy", "white", "firebrick"))(1000))#行列聚类
+pheatmap(m,scale="row",cluster_rows = TRUE, cluster_cols = FALSE,
+         cellwidth=7,cellheight=7,
+         border_color="black",
+         color = colorRampPalette(c("navy", "white", "firebrick"))(1000))#行聚类
+pheatmap(m,scale="row",cluster_rows = FALSE, cluster_cols = FALSE,
+         cellwidth=7,cellheight=7,
+         border_color="black",
+         color = colorRampPalette(c("navy", "white", "firebrick"))(1000))#行列不聚类
+#自定义分组注释颜色
+annotation_col <- data.frame(Treat=factor(rep(c("CK","Eu","EuLm"),each=5)))
+row.names(annotation_col) <- colnames(m)
+annotation_col
+ann_colors = list(Treat=c(CK="firebrick",Eu="blue",EuLm="#7570B3"))
+pheatmap(m,scale="row",
+         #cutree_rows=4,#行分块
+         #cutree_cols = 3,#列分块
+         annotation_col=annotation_col,annotation_colors = ann_colors,cellwidth=7,cellheight=7,border_color="black",display_numbers = F,clustering_method ="complete",color = colorRampPalette(c("navy", "white", "firebrick3"))(1000))
+
+dev.off()
+
+```
+
+# Heatmap_with_markers
+```{r}
+# 读取数据
+  data <- read.csv("resources/database/heatmap/gene_exp.csv", header = TRUE) %>% 
+    filter(!duplicated(ID))
+  # 数据标准化
+  data_scaled <- data %>%
+    # 提取数值列并转置
+    { tibble(Matrix = t(.[, c(3:8)])) } %>%
+    # 对转置后的列（原数据的行）进行标准化
+    mutate_all(~scale(.)) %>%
+    # 转置回原始结构
+    t() %>%
+    # 转换为数据框
+    as.data.frame() %>%
+    # 合并非数值列
+    cbind(data[, c("Pathway", "ID")],
+          .
+    ) 
+  # 设置列名
+  colnames(data_scaled) <- colnames(data)
+# 定义标记基因，这里可以自定义，或者通过表达等进行筛选
+highlight_genes <- data_scaled %>% 
+  group_by(Pathway) %>% 
+  slice(1:2)%>%
+  select(Pathway, ID) %>%
+  mutate(highlight = T)
+# 合并表格
+data_mat <- data_scaled  %>% 
+  full_join(highlight_genes, by = c("Pathway", "ID")) %>% 
+  ungroup %>% 
+  arrange(desc(Pathway), ID)
+# 定义注释信息
+# 行注释
+ha_row <- rowAnnotation(
+  `Pathway` = data_mat$Pathway,
+   show_legend = TRUE,
+  annotation_name_side = "top"
+)
+
+gene_idx <- data_mat$highlight == TRUE
+ha_genes <- rowAnnotation(
+  link = anno_mark(
+    at = which(gene_idx),
+    labels = data_mat$ID[which(gene_idx)],
+    labels_gp = gpar(fontsize = 10), padding = unit(1, "mm"),
+    side = "left",
+    labels_rot = 0
+  )
+)
+
+# 绘图
+pdf("output/figures/heatmaps/heatmap_with_markers.pdf", width = 8, height = 7)
+# 颜色参数
+col <- colorRamp2(breaks = c(-2, 0, 2), colors = c("navy", "white", "firebrick3"))
+Heatmap(
+  as.matrix(data_mat[,c(3:8)]), 
+  heatmap_legend_param = list(
+    title = "Scaled expression", 
+    title_position = "leftcenter-rot"
+  ),
+  row_order = 1:length(data_mat$Pathway),
+  row_split = data_mat$Pathway, 
+  column_split = 1:6,
+  column_order = colnames(data_mat)[c(3:8)], 
+  column_names_side = "top",
+  right_annotation = ha_row,
+  left_annotation = ha_genes,
+  cluster_rows = F, 
+  row_title = NULL,
+  column_title = NULL,
+  col= col
+)
+dev.off()
+
+```
+
+# 批量绘制多个通路的热图
+```{r}
+# 定义要筛选的Type
+pathway_select <- c("Citrate cycle (TCA cycle)", "Glycolysis / Gluconeogenesis","Steroid biosynthesis","Peroxisome","ABC transporters","Galactose metabolism","Valine, leucine and isoleucine biosynthesis") 
+
+# 读取数据
+data <- read.csv("resources/database/heatmap/gene_exp.csv", header = TRUE) %>% 
+  filter(!duplicated(ID))
+# 数据标准化
+data_scaled <- data %>%
+  # 提取数值列并转置
+  { tibble(Matrix = t(.[, c(3:8)])) } %>%
+  # 对转置后的列（原数据的行）进行标准化
+  mutate_all(~scale(.)) %>%
+  # 转置回原始结构
+  t() %>%
+  # 转换为数据框
+  as.data.frame() %>%
+  # 合并非数值列
+  cbind(data[, c("Pathway", "ID")],
+    .
+  ) 
+# 设置列名
+colnames(data_scaled) <- colnames(data)
+
+# 提取所需的列
+data_filtered <- data_scaled  %>% 
+  filter(Pathway %in% pathway_select) %>%
+  { rownames(.) <- NULL; . } %>% #删除之前标准化时候产生的行名称
+  tibble::column_to_rownames("ID")
+# 定义颜色参数
+# col <- colorRampPalette(c("navy", "white", "firebrick3"))(50)
+# 设置图例范围
+col <- colorRamp2(breaks = c(-1, 0, 1), colors = c("navy", "white", "firebrick3"))
+# 函数：绘制热图
+draw_heatmap <- function(df, group_name) {
+  # 转换为矩阵
+  matrix_data <- as.matrix(df[, -1])
+
+    # 绘制热图
+  
+  Heatmap(matrix_data,
+          column_title = group_name,
+          name = "values",
+          column_title_side = "top",
+          column_title_gp = gpar(fontsize = 20, fontface = "bold",family = "serif"),
+          cluster_rows = T,
+          show_row_dend = F, #行聚类但是不显示连线
+          cluster_columns = F,
+          show_row_names = T,
+          column_names_side = "bottom",
+          col= col,
+          rect_gp = gpar(col = "white", lwd = 1),#设置热图单元格的边框颜色和样式
+          row_names_gp = gpar(fontsize = 12,family = "serif",fontface = "italic"),
+          row_names_side = c("left"),
+          column_names_gp = gpar(fontsize = 12,family = "serif"),
+          width = ncol(matrix_data) * unit(5, "mm"), # 通过设置热图宽度为表达式来固定单元格宽度
+          height = nrow(matrix_data) * unit(5, "mm"))  # 固定单元格高度
+}
+
+# 分组数据
+groups <- split(data_filtered, data_filtered$Pathway)
+
+# 分别绘制热图
+pdf("output/figures/heatmaps/kegg_select_pathway.pdf", width = 10, height = 8)
+for (group_name in names(groups)) {
+  current_data <- groups[[group_name]]
+  
+  # 绘制当前分组的热图
+  current_heatmap <- draw_heatmap(current_data, group_name)
+  
+  print(current_heatmap)
+}
+dev.off()
+
+```
+
+# 其他例子
+
+```{r}
+# 读取数据并标准化
+df <- read.csv("E:/03 我的文档/R绘图/resources/database/heatmap/heatmap_data.csv",header = T)
+df_scale<-df%>%select(!system)%>%t()%>%as.data.frame()%>%
+  scale(center=F)%>%t()%>%as.data.frame()
+rownames(df_scale)=df$system
+# add annotation：
+anno_col <- read.csv("E:/03 我的文档/R绘图/resources/database/heatmap/anno_col.csv",header = T)
+anno_row<- read.csv("E:/03 我的文档/R绘图/resources/database/heatmap/anno_row.csv",header = T,row.names = 1)
+bk<-seq(-max(abs(log2_FC_dataset_dcast_scale)),max(abs(log2_FC_dataset_dcast_scale)),length.out=100)
+left_anno = HeatmapAnnotation(cluster=anno_block(gp=gpar(fill=c("#F64E60","#61C0BF","#FFC300")),
+                                                 labels=c("Group1","Group2","Group3"),
+                                                 labels_gp = gpar(col = "black", fontsize = 7)),
+                              show_legend = T, which = "row")
+row_split_df<-anno_row%>%select(Mechanism)
+top_anno = HeatmapAnnotation(df=anno_col%>%select(Crop),                            col=list(Crop=c(Medicago="#DF8F44FF",Maize="#6A6599FF",Rice="#00A1D5FF",Wheat="#B24745FF")))
+bk2<-seq(min(df_scale),max(df_scale),length.out=100)
+# 绘图
+Heatmap(as.matrix(df_scale),
+        row_split = row_split_df, 
+        left_annotation = left_anno,
+        top_annotation = top_anno,
+        border = "black",
+        column_names_gp = gpar(fontsize = 7),
+        row_names_gp = gpar(fontsize = 7),
+        rect_gp = gpar(col="white",lwd=1),
+        column_title = NULL,
+        row_title = NULL,
+        col = c(colorRampPalette(c("#754415", "#B3A492", "#D6C7AE", "white"))(length(bk2[bk2<=0])),
+                colorRampPalette(c("white","#99B080", "#748E63","#183D3D"))(length(bk2[bk2>=0]))),
+        clustering_method_rows = "ward.D2",
+        clustering_method_columns = "ward.D2"
+)
+
+
+
+```
+
+```{r}
+
+```
+

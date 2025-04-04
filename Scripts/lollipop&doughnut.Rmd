@@ -1,0 +1,393 @@
+---
+title: "lollipop&doughnut plot" 棒棒糖甜甜圈图
+author: "milaotou"
+date: "2025-03-04"
+output: html_document
+---
+# 设置工作目录
+```{r setup, include=FALSE}
+# Global chunk options禁止全局代码自动运行
+knitr::opts_chunk$set(echo=FALSE, tidy=TRUE, warning=FALSE, message=FALSE)
+
+library(rstudioapi)
+setwd(dirname(getActiveDocumentContext()$path))
+getwd()
+```
+
+# 加载包
+```{r}
+pacman::p_load(ggforce, tidyverse, patchwork,tidyplots)
+source("input/global_vars.R")
+```
+
+# lollipop plot
+```{r}
+#读取数据
+lollipop_data <- read.csv("resources/database/lollipop&doughnut/lollipop_data.csv",header = T) %>%
+  mutate(label = format(cell_counts, decimal.mark = ",", nsmall = 2))#最后图标签中将小数点换成了逗号
+#定义颜色
+colors <- c("#642251", "#AD3B8F","#116A36", "#317EC1","#13576A",   
+            "#62C08D", "#46C1BB", "#F0545D", "#FCC9A2", "#94C73D", 
+            "#3A481E", "#F0E94A", "#BDB231", "#EEE111", "#706B2C")
+
+#绘图
+#棒棒糖图主体和数值
+p1 <- ggplot(lollipop_data, aes(x = cell_types, y = cell_counts, color = cell_types)) +
+  geom_point(size = 4) +
+  geom_segment(aes(x = cell_types, xend = cell_types, y = 0, yend = cell_counts), 
+               linewidth = 1.5) +
+  geom_text(aes(y = cell_counts, label = label),
+            size = 5, angle = 90,
+            nudge_y = 3,
+            hjust = 0,
+            vjust = 0.5) +
+  scale_y_continuous(limits = c(-2, 108), 
+                     breaks = seq(0, 100, 20),
+                     expand = c(0, 0)) +
+  scale_color_manual(values = colors) +
+  labs(y = expression(paste("# of cells (10"^3, ")"))) +
+  theme_classic2() + 
+  theme(legend.position = "none",
+        axis.title.y = element_text(size = 18, color = "grey10"),
+        axis.text.y = element_text(size = 15, color = "#808181"),
+        axis.title.x = element_blank(),
+        axis.text.x = element_blank(),
+        axis.line.x = element_blank(),
+        axis.ticks.x = element_blank(),
+        axis.line.y = element_line(linewidth = 1.5, color = "#808181"),
+        axis.ticks.y = element_line(linewidth = 1.5, color = "#808181"),
+        axis.ticks.length.y = unit(0.2, "cm"))
+p1
+#棒棒糖图基底注释条带
+p2 <- ggplot(lollipop_data, aes(x = cell_types, y = 0.1, fill = cell_types)) +
+  geom_tile(width = 0.95) +
+  scale_x_discrete(expand = c(0, 0)) +
+  scale_y_continuous(expand = c(0, 0)) +
+  scale_fill_manual(values = colors) +
+  theme_bw() +
+  theme(legend.position = "none",
+        panel.border = element_rect(linewidth = 2),
+        panel.grid = element_blank(),
+        axis.title = element_blank(),
+        axis.ticks = element_blank(),
+        axis.text.y = element_blank(),
+        axis.text.x = element_text(size = 15, 
+                                   color = "#808181", 
+                                   family = "sans",
+                                   hjust = 1,
+                                   vjust = 1,
+                                   angle = 45))
+p2
+lollipops <- p1 / p2 + plot_layout(heights = c(1, 0.05))
+lollipops
+#保存图形
+ggsave(paste0("output/figures/lollipop&doughnut/", "lollipop_", Sys.Date(), ".pdf"), plot = lollipops, width = 8, height = 4.7)
+
+
+```
+
+# lollipop plot 用tidyplots
+```{r}
+lop<- lollipop_data |>
+  tidyplot(x = cell_types, y = cell_counts, color = cell_types) |>
+  add_mean_dot(size = 2.5) |>
+  add_mean_bar(width = 0.1) |>
+  add_mean_value() |>
+  theme_ggplot2() |>
+  adjust_x_axis(rotate_labels = 45)|>
+  remove_legend()
+lop
+```
+
+
+# doughnut plot 数据直接生成，较简单
+```{r}
+# 甜甜圈1
+data <- data.frame(
+  cells = c("L2/3 IT", "L4/5 IT", "L5 IT", "L6 IT", "L6b"),
+  percent = c(45, 21, 12, 9, 13)
+) %>%
+  mutate(label = paste0(percent,"%"))
+colors <- c("L2/3 IT" = "#FEE140", "L4/5 IT" = "#F8A46A", "L5 IT" = "#F57AB3", 
+            "L6 IT" = "#AD3396", "L6b" = "#E64CFF")
+p3 <- ggplot() +
+  geom_arc_bar(data = data, stat = "pie", sep = 0.05,
+               aes(x0 = 0,y0 = 0,r0 = 0.5, r = 2,
+                   amount = percent,
+                   fill = cells,
+                   color = cells),
+               show.legend = F) +
+  annotate("text",                     
+           x = 1.2,       
+           y = 0.2,                       
+           label = "45%", 
+           size = 6,                    
+           angle = 0,                   
+           hjust = 0.5)+
+  annotate("text",                     
+           x = 0,       
+           y = -1.2,                       
+           label = "21%", 
+           size = 6,                    
+           angle = 0,                   
+           hjust = 0.5)+
+  annotate("text",                     
+           x = -1.2,       
+           y = -0.7,                       
+           label = "12%", 
+           size = 6,                    
+           angle = 0,                   
+           hjust = 0.5)+
+  annotate("text",                     
+           x = -1.2,       
+           y = 0.4,                       
+           label = "9%", 
+           size = 6,                    
+           angle = 0,                   
+           hjust = 0.5)+
+  annotate("text",                     
+           x = -0.5,       
+           y = 1.2,                       
+           label = "13%", 
+           size = 6,                    
+           angle = 0,                   
+           hjust = 0.5)+
+  scale_fill_manual(values = colors) +
+  scale_color_manual(values = colors) +
+  theme_no_axes() +
+  theme(panel.border = element_blank())
+p3
+# 甜甜圈2
+data <- data.frame(
+  cells = c("L6 IT1","L6 IT2","L6 IT3"),
+  percent = c(87, 2, 11),
+  focus = c(0, 0.1, 0.1)
+)
+data  <- data %>%
+  mutate(label = paste0(percent,"%"))
+
+colors <- c("L6 IT1" = "#86CEB8", "L6 IT2" = "#A4B3D4", "L6 IT3" = "#FDA27C")
+
+
+p4 <- ggplot() +
+  geom_arc_bar(data = data, stat = "pie", sep = 0.03,
+               aes(x0 = 0,y0 = 0,r0 = 0.5, r = 2,
+                   amount = percent,
+                   explode = focus, #设置需要突出展示的部分
+                   fill = cells,
+                   color = cells),
+               show.legend = F) +
+  annotate("text",                     
+           x = 0,       
+           y = -1,                       
+           label = "87%", 
+           size = 6,                    
+           angle = 0,                   
+           hjust = 0.5)+
+  annotate("text",                     
+           x = -1.1,       
+           y = 0.95,                       
+           label = "2%", 
+           size = 6,                    
+           angle = 0,                   
+           hjust = 0.5)+
+  annotate("text",                     
+           x = -0.5,       
+           y = 1.3,                       
+           label = "11%", 
+           size = 6,                    
+           angle = 0,                   
+           hjust = 0.5)+
+  scale_fill_manual(values = colors) +
+  scale_color_manual(values = colors) +
+  theme_no_axes() +
+  theme(panel.border = element_blank())
+p4
+# 甜甜圈3
+data <- data.frame(
+  mutated = c("0","1","2 to 5", "6 to 10", "11 to 20" , "21+"),
+  percent = c(8, 14, 34, 10, 20 ,13))
+
+data  <- data %>%
+  mutate(label = paste0(percent,"%"))
+
+colors <- c("0" = "#FFFFFF", "1" = "#C8DFF7", "2 to 5" = "#90C0F9",
+            "6 to 10" = "#539FFA", "11 to 20" = "#5758F9", "21+" = "#3B3FF6")
+
+
+p5 <- ggplot() +
+  geom_arc_bar(data = data, stat = "pie", sep = 0,
+               aes(x0 = 0,y0 = 0,r0 = 0.5, r = 2,
+                   amount = percent,
+                   fill = mutated,
+                   color = mutated),
+               show.legend = F) +
+  geom_arc(aes(x0 = 0,y0 = 0,r = 2, 
+               start = 0, end = 2*pi),
+           size = 1.2,color = "black"
+  )+
+  geom_arc(aes(x0 = 0,y0 = 0,r = 0.5, 
+               start = 0, end = 2*pi),
+           size = 1.2,color = "black"
+  )+
+  annotate("text",                     
+           x = 0,       
+           y = 0,                       
+           label = "n = 96", 
+           size = 4,                    
+           angle = 0,                   
+           hjust = 0.5)+
+  annotate("text",                     
+           x = 0.33,       
+           y = 1.35,                       
+           label = "8%", 
+           size = 6,                    
+           angle = 0,                   
+           hjust = 0.5)+
+  annotate("text",                     
+           x = 1,       
+           y = 0.8,                       
+           label = "14%", 
+           size = 6,                    
+           angle = 0,                   
+           hjust = 0.5)+
+  annotate("text",                     
+           x = 0.8,       
+           y = -1,                       
+           label = "34%", 
+           size = 6,                    
+           angle = 0,                   
+           hjust = 0.5)+
+  annotate("text",                     
+           x = -0.9,       
+           y = -1,                       
+           label = "10%", 
+           size = 6,                    
+           angle = 0,                   
+           hjust = 0.5)+
+  annotate("text",                     
+           x = -1.3,       
+           y = 0.1,                       
+           label = "20%", 
+           size = 6,                    
+           angle = 0,                   
+           hjust = 0.5)+
+  annotate("text",                     
+           x = -0.6,       
+           y = 1.2,                       
+           label = "13%", 
+           size = 6,                    
+           angle = 0,                   
+           hjust = 0.5)+
+  scale_fill_manual(values = colors) +
+  scale_color_manual(values = colors) +
+  theme_no_axes() +
+  theme(panel.border = element_blank())
+p5
+doughnuts <- p3 + p4 + p5
+doughnuts
+ggsave(paste0("output/figures/lollipop&doughnut/", "doughnut_", Sys.Date(), ".pdf"), plot = doughnuts, width = 8, height = 2.8)
+
+```
+
+# 甜甜圈代码优化
+```{r}
+# 数据准备
+library(readxl)
+donut1 <- read_excel("resources/database/lollipop&doughnut/donut_data.xlsx", sheet = "donut1") %>% 
+  mutate(percent = round(value / sum(value) * 100, digits = 1)) 
+donut2 <- read_excel("resources/database/lollipop&doughnut/donut_data.xlsx", sheet = "donut2") %>%
+  mutate(percent = round(value / sum(value) * 100, digits = 1))
+
+# 通用颜色设置
+color_palette <- clrs$col.6 %>% 
+  set_names(donut1$cells)
+# 甜甜圈绘图函数
+create_doughnut <- function(data, palette, label_positions, 
+                            sep = 0.05, explode = NULL, add_arc = FALSE) {
+# 自动计算标签位置
+calc_label_pos <- function(perc) {
+  start_angles <- cumsum(c(0, 360 * head(perc, -1)/100))
+  center_angle = start_angles + (360 * perc/100)/2
+  data.frame(
+    x = 1.5 * sinpi(center_angle/180),
+    y = 1.5 * cospi(center_angle/180)
+  )
+}
+  
+  # 创建基础图形
+  p <- ggplot() +
+    geom_arc_bar(
+      data = data,
+      stat = "pie",
+      alpha = 0.7,
+      aes(x0 = 0, y0 = 0, r0 = 0.5, r = 2,
+          amount = percent, 
+          fill = !!sym(names(data)[1])),
+      color = "white",
+      show.legend = FALSE
+    ) +
+    scale_fill_manual(values = color_palette) +
+    coord_fixed() +  # 确保图形保持正圆形
+    theme_void()
+  
+  # 添加额外元素
+  if(add_arc) {
+    p <- ggplot() +
+      geom_arc_bar(
+      data = data,
+      stat = "pie",
+      alpha = 0.7,
+      aes(x0 = 0, y0 = 0, r0 = 0.5 + data$focus, r = 2 + data$focus,
+          amount = percent, 
+          fill = !!sym(names(data)[1])),
+      color = "white",
+      size = 1.5,
+      show.legend = TRUE
+    )+
+      scale_fill_manual(values = color_palette) +
+      coord_fixed() +  # 确保图形保持正圆形
+    theme_void()
+  }
+  
+  # 添加标签
+  label_data <- calc_label_pos(data$percent)
+  label_data$label <- paste0(data$percent, "%")
+  
+  p + geom_text(
+    data = label_data,
+    aes(x = x, y = y, label = label),
+    size = 6,
+    hjust = 0.5,
+    vjust = 0.5,
+    family = "serif"
+  )
+}
+# 调用函数，生成图形
+donut_plot <- create_doughnut(donut1, color_palette, label_positions = TRUE)
+donut_plot_force <- create_doughnut(donut2, color_palette, label_positions = TRUE,add_arc = TRUE)
+# 显示图形
+print(donut_plot)
+print(donut_plot_force)
+# 组合导出
+combined_donuts = donut_plot + donut_plot_force
+ggsave(paste0("output/figures/lollipop&doughnut/", "donuts_", Sys.Date(), ".pdf"), plot = combined_donuts, width = 8, height = 4)
+```
+
+# tidyplots 绘制甜甜圈
+```{r}
+tp1 = donut1 |> 
+  tidyplot(y = value, color = cells) |> 
+  add_donut()
+tp1
+# 自带数据绘制分面甜甜圈
+tp2 = gene_expression |> 
+  dplyr::filter(external_gene_name %in% c("Apol6","Bsn","Vgf","Mpc2")) |> 
+  tidyplot(y = expression, color = group) |> 
+  add_donut()|> 
+split_plot(by = external_gene_name, ncol = 2, nrow = 2)
+
+tp2
+# 不好绘制标签，因为没有自带函数
+```
+
